@@ -1,74 +1,96 @@
-import os
-import csv
-import random
-import string
-from psychopy import visual, core, event
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cognitive Imagery & Spatial Memory Study</title>
+  <script src="https://unpkg.com/jspsych@7.3.4"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.3"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-canvas-keyboard-response@1.1.3"></script>
+  <link href="https://unpkg.com/jspsych@7.3.4/css/jspsych.css" rel="stylesheet" type="text/css" />
+  <style>
+    body { background-color: #222222; color: #ffffff; font-family: Arial, sans-serif; }
+    .jspsych-content { max-width: 900px; }
+    .highlight-cyan { color: #00ffff; font-weight: bold; }
+    .prompt-box { font-size: 22px; line-height: 1.5; margin-bottom: 30px; }
+    .key-guide { font-size: 18px; color: #00ffff; margin-top: 20px; }
+  </style>
+</head>
+<body></body>
+<script>
+  // ============================================================================
+  // 1. ANONYMOUS ID & IRB SETUP (ZERO IDENTIFIABLE INFO)
+  // ============================================================================
+  const anonId = "ANON_" + Math.floor(100000 + Math.random() * 900000);
+  let vviqTotal = 0;
+  let cogGroup = "Pending";
 
-# ==============================================================================
-# 1. ANONYMOUS ID & IRB-COMPLIANT DATA SETUP (ZERO IDENTIFIABLE INFO)
-# ==============================================================================
-# Generate a random 6-digit anonymous participant ID (no names, ages, or timestamps)
-anon_id = "ANON_" + ''.join(random.choices(string.digits, k=6))
+  const jsPsych = initJsPsych({
+    on_finish: function() {
+      // Classify participant
+      if (vviqTotal <= 20) cogGroup = "Aphantasic";
+      else if (vviqTotal >= 60) cogGroup = "Visualizer";
+      else cogGroup = "Typical/Intermediate";
 
-if not os.path.exists('data'):
-    os.makedirs('data')
+      // Add summary columns to all rows and export clean CSV
+      jsPsych.data.addProperties({
+        Anonymous_ID: anonId,
+        VVIQ_Total_Score: vviqTotal,
+        Cognitive_Group: cogGroup
+      });
 
-filename = f"data/{anon_id}.csv"
+      // Automatically download CSV for participant/researcher
+      jsPsych.data.get().localSave('csv', `${anonId}_results.csv`);
+    }
+  });
 
-data_file = open(filename, mode='w', newline='', encoding='utf-8')
-writer = csv.writer(data_file)
-writer.writerow([
-    'Anonymous_ID', 'Phase', 'Trial_Num', 'Condition_Detail', 
-    'Stimulus_Info', 'Correct_Answer', 'Participant_Response', 
-    'Accuracy', 'Reaction_Time_ms', 'VVIQ_Total_Score', 'Cognitive_Group'
-])
+  const timeline = [];
 
-# ==============================================================================
-# 2. WINDOW & GLOBAL STIMULI SETUP
-# ==============================================================================
-win = visual.Window(size=[1280, 800], fullscr=False, color=[-0.2, -0.2, -0.2], units='height')
-clock = core.Clock()
+  // ============================================================================
+  // INFORMED CONSENT SCREEN (IRB COMPLIANT)
+  // ============================================================================
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+      <h2>Informed Consent & Anonymous Participation</h2>
+      <div class="prompt-box" style="text-align:left; font-size:18px;">
+        <p>You are invited to participate in a cognitive science research study examining visual imagery and memory.</p>
+        <ul>
+          <li>Your participation is completely voluntary and anonymous.</li>
+          <li><strong>No personally identifiable information</strong> (name, age, IP address, or timestamp) is collected.</li>
+          <li>You may exit at any time by closing this browser tab.</li>
+        </ul>
+        <p>By pressing <strong>[Y]</strong>, you confirm that you understand and consent to participate.</p>
+      </div>
+      <div class="key-guide">Press [Y] to Consent and Begin</div>
+    `,
+    choices: ['y'],
+    data: { Phase: 'Consent' }
+  });
 
-def show_instructions(text_str, continue_key='space', prompt_text="Press [SPACE] to continue..."):
-    msg = visual.TextStim(win, text=text_str, height=0.035, wrapWidth=1.2, color='white')
-    prompt = visual.TextStim(win, text=prompt_text, pos=(0, -0.35), height=0.025, color='lightgrey')
-    msg.draw()
-    prompt.draw()
-    win.flip()
-    keys = event.waitKeys(keyList=[continue_key, 'escape'])
-    if 'escape' in keys:
-        data_file.close()
-        win.close()
-        core.quit()
+  // ============================================================================
+  // PHASE 1: VVIQ SCREENING (16 ITEMS)
+  // ============================================================================
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+      <h2>Phase 1: Visual Imagery Questionnaire</h2>
+      <div class="prompt-box">
+        <p>For each scenario, rate how vivid your mental image is using keys <strong>1 to 5</strong> on your keyboard:</p>
+        <p style="font-size:18px; text-align:left;">
+          <strong>1</strong> = No image at all (you only "know" you are thinking of the object)<br>
+          <strong>2</strong> = Vague and dim<br>
+          <strong>3</strong> = Moderately clear and vivid<br>
+          <strong>4</strong> = Clear and reasonably vivid<br>
+          <strong>5</strong> = Perfectly clear and as vivid as real vision
+        </p>
+      </div>
+      <div class="key-guide">Press [SPACE] to start Phase 1</div>
+    `,
+    choices: [' '],
+    data: { Phase: 'Instructions_VVIQ' }
+  });
 
-# ==============================================================================
-# INFORMED CONSENT SCREEN (IRB REQUIREMENT)
-# ==============================================================================
-show_instructions(
-    "INFORMED CONSENT & ANONYMOUS PARTICIPATION\n\n"
-    "You are invited to participate in a cognitive science research study examining visual imagery and memory.\n\n"
-    "• Your participation is completely voluntary and anonymous.\n"
-    "• No personally identifiable information (name, age, IP address, or timestamp) is collected.\n"
-    "• You may stop at any time by pressing the [ESC] key.\n\n"
-    "By pressing [Y], you confirm that you understand and consent to participate.",
-    continue_key='y',
-    prompt_text="Press [Y] to Consent and Begin   |   Press [ESC] to Exit"
-)
-
-# ==============================================================================
-# PHASE 1: VVIQ SCREENING (16 ITEMS)
-# ==============================================================================
-show_instructions(
-    "PHASE 1: VISUAL IMAGERY QUESTIONNAIRE\n\n"
-    "For each scenario, rate how vivid your mental image is using keys 1 to 5:\n\n"
-    "1 = No image at all (you only 'know' you are thinking of the object)\n"
-    "2 = Vague and dim\n"
-    "3 = Moderately clear and vivid\n"
-    "4 = Clear and reasonably vivid\n"
-    "5 = Perfectly clear and as vivid as real vision"
-)
-
-vviq_prompts = [
+  const vviqPrompts = [
     "1. Think of a relative or friend you see frequently: The exact contour of their face, head, shoulders, and body.",
     "2. The characteristic poses of their head, attitudes of body, etc.",
     "3. The precise carriage, length of step, etc. in walking.",
@@ -85,193 +107,236 @@ vviq_prompts = [
     "14. The color and shape of the trees.",
     "15. The color and shape of the lake.",
     "16. A strong wind blows on the trees and on the lake causing waves."
-]
+  ];
 
-vviq_total = 0
+  vviqPrompts.forEach((promptText, index) => {
+    timeline.push({
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: `
+        <div class="prompt-box">${promptText}</div>
+        <div class="key-guide">[1] No Image &nbsp;&nbsp;|&nbsp;&nbsp; [2] Dim &nbsp;&nbsp;|&nbsp;&nbsp; [3] Moderate &nbsp;&nbsp;|&nbsp;&nbsp; [4] Clear &nbsp;&nbsp;|&nbsp;&nbsp; [5] Perfectly Vivid</div>
+      `,
+      choices: ['1', '2', '3', '4', '5'],
+      data: { Phase: 'VVIQ', Trial_Num: index + 1 },
+      on_finish: function(data) {
+        const rating = parseInt(data.response);
+        vviqTotal += rating;
+        data.Participant_Response = rating;
+      }
+    });
+  });
 
-for idx, prompt_text in enumerate(vviq_prompts, start=1):
-    q_stim = visual.TextStim(win, text=prompt_text, pos=(0, 0.1), height=0.035, wrapWidth=1.2, color='white')
-    scale_stim = visual.TextStim(win, text="[1] No Image    [2] Dim    [3] Moderate    [4] Clear    [5] Perfectly Vivid", pos=(0, -0.15), height=0.028, color='cyan')
-    
-    q_stim.draw()
-    scale_stim.draw()
-    win.flip()
-    
-    clock.reset()
-    keys = event.waitKeys(keyList=['1', '2', '3', '4', '5', 'escape'])
-    rt_ms = round(clock.getTime() * 1000, 2)
-    
-    if 'escape' in keys:
-        data_file.close()
-        win.close()
-        core.quit()
-        
-    rating = int(keys[0])
-    vviq_total += rating
-    
-    writer.writerow([
-        anon_id, 'VVIQ', idx, 'Screening', 
-        f'Item_{idx}', 'N/A', rating, 'N/A', rt_ms, '', ''
-    ])
+  // ============================================================================
+  // PHASE 2: TASK A - SPATIAL ROTATION MATRIX
+  // ============================================================================
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+      <h2>Phase 2: Spatial Rotation Task</h2>
+      <div class="prompt-box">
+        <p>You will see two geometric shapes side-by-side. The shape on the right is rotated.</p>
+        <p>Decide if the right shape is the <strong>EXACT SAME</strong> shape rotated, or a <strong>MIRROR IMAGE</strong>.</p>
+        <p><span class="highlight-cyan">[S]</span> = SAME &nbsp;&nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp;&nbsp; <span class="highlight-cyan">[M]</span> = MIRROR IMAGE</p>
+      </div>
+      <div class="key-guide">Respond as quickly and accurately as possible. Press [SPACE] to begin.</div>
+    `,
+    choices: [' '],
+    data: { Phase: 'Instructions_TaskA' }
+  });
 
-if vviq_total <= 20:
-    cog_group = "Aphantasic"
-elif vviq_total >= 60:
-    cog_group = "Visualizer"
-else:
-    cog_group = "Typical/Intermediate"
+  function drawAsymmetricShape(ctx, centerX, centerY, angleDeg, isMirror) {
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate((angleDeg * Math.PI) / 180);
+    if (isMirror) ctx.scale(-1, 1);
 
-# ==============================================================================
-# PHASE 2: TASK A - SPATIAL ROTATION MATRIX
-# ==============================================================================
-show_instructions(
-    "PHASE 2: SPATIAL ROTATION TASK\n\n"
-    "You will see two geometric shapes side-by-side.\n"
-    "The shape on the right is rotated at an angle.\n\n"
-    "Decide if the right shape is the EXACT SAME shape rotated, or a MIRROR IMAGE.\n\n"
-    "Press [S] for SAME\n"
-    "Press [M] for MIRROR IMAGE\n\n"
-    "Respond as quickly and accurately as possible."
-)
+    // L-block asymmetric polygon
+    ctx.beginPath();
+    ctx.moveTo(-60, -60);
+    ctx.lineTo(-20, -60);
+    ctx.lineTo(-20, 20);
+    ctx.lineTo(50, 20);
+    ctx.lineTo(50, 60);
+    ctx.lineTo(-60, 60);
+    ctx.closePath();
 
-base_vertices = [
-    (-0.12, -0.12), (-0.04, -0.12), (-0.04, 0.04), 
-    (0.10, 0.04), (0.10, 0.12), (-0.12, 0.12)
-]
-mirror_vertices = [(-x, y) for (x, y) in base_vertices]
+    ctx.fillStyle = '#4682B4';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.stroke();
+    ctx.restore();
+  }
 
-angles = [0, 45, 90, 135, 180]
-task_a_trials = []
-for ang in angles:
-    task_a_trials.append({'angle': ang, 'is_mirror': False, 'corr': 's'})
-    task_a_trials.append({'angle': ang, 'is_mirror': True, 'corr': 'm'})
+  const angles = [0, 45, 90, 135, 180];
+  let taskATrials = [];
+  angles.forEach(ang => {
+    taskATrials.push({ angle: ang, isMirror: false, corr: 's' });
+    taskATrials.push({ angle: ang, isMirror: true, corr: 'm' });
+  });
+  taskATrials = jsPsych.randomization.shuffle(taskATrials);
 
-random.shuffle(task_a_trials)
+  taskATrials.forEach((trial, index) => {
+    // Fixation
+    timeline.push({
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: '<div style="font-size:48px;">+</div>',
+      choices: "NO_KEYS",
+      trial_duration: 500
+    });
 
-for idx, trial in enumerate(task_a_trials, start=1):
-    fix = visual.TextStim(win, text='+', height=0.05, color='white')
-    fix.draw()
-    win.flip()
-    core.wait(0.5)
-    
-    left_shape = visual.ShapeStim(win, vertices=base_vertices, pos=(-0.3, 0), fillColor='steelblue', lineColor='white')
-    
-    verts = mirror_vertices if trial['is_mirror'] else base_vertices
-    right_shape = visual.ShapeStim(win, vertices=verts, pos=(0.3, 0), ori=trial['angle'], fillColor='steelblue', lineColor='white')
-    
-    helper = visual.TextStim(win, text="[S] = Same     |     [M] = Mirror", pos=(0, -0.35), height=0.025, color='lightgrey')
-    
-    left_shape.draw()
-    right_shape.draw()
-    helper.draw()
-    win.flip()
-    
-    clock.reset()
-    keys = event.waitKeys(keyList=['s', 'm', 'escape'])
-    rt_ms = round(clock.getTime() * 1000, 2)
-    
-    if 'escape' in keys:
-        data_file.close()
-        win.close()
-        core.quit()
-        
-    resp = keys[0]
-    acc = 1 if resp == trial['corr'] else 0
-    
-    writer.writerow([
-        anon_id, 'TaskA_Rotation', idx, f"Angle_{trial['angle']}",
-        f"Mirror_{trial['is_mirror']}", trial['corr'], resp, acc, rt_ms, vviq_total, cog_group
-    ])
+    // Rotation Stimulus
+    timeline.push({
+      type: jsPsychCanvasKeyboardResponse,
+      canvas_size: [400, 800],
+      stimulus: function(c) {
+        const ctx = c.getContext('2d');
+        drawAsymmetricShape(ctx, 220, 200, 0, false);
+        drawAsymmetricShape(ctx, 580, 200, trial.angle, trial.isMirror);
+      },
+      prompt: '<div class="key-guide">[S] = Same &nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp; [M] = Mirror</div>',
+      choices: ['s', 'm'],
+      data: {
+        Phase: 'TaskA_Rotation',
+        Trial_Num: index + 1,
+        Condition_Detail: `Angle_${trial.angle}`,
+        Stimulus_Info: `Mirror_${trial.isMirror}`,
+        Correct_Answer: trial.corr
+      },
+      on_finish: function(data) {
+        data.Participant_Response = data.response;
+        data.Accuracy = (data.response === trial.corr) ? 1 : 0;
+        data.Reaction_Time_ms = Math.round(data.rt);
+      }
+    });
+  });
 
-# ==============================================================================
-# PHASE 3: TASK B - SEMANTIC TAGGING ON IDENTICAL OBJECTS ("BLANK PENS")
-# ==============================================================================
-show_instructions(
-    "PHASE 3: SPATIAL-SEMANTIC FEATURE RECALL\n\n"
-    "You will see a grid of 6 IDENTICAL white pens, each labeled with a descriptive word (e.g., 'RED', 'STRIPED').\n\n"
-    "Memorize WHICH word belongs to WHICH spatial location.\n"
-    "After a brief flash, one grid spot will be highlighted and you will identify its descriptive tag.\n\n"
-    "Press [1], [2], [3], or [4] to select the matching word."
-)
+  // ============================================================================
+  // PHASE 3: TASK B - SEMANTIC TAGGING ON IDENTICAL OBJECTS ("BLANK PENS")
+  // ============================================================================
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+      <h2>Phase 3: Spatial-Semantic Feature Recall</h2>
+      <div class="prompt-box">
+        <p>You will see a grid of <strong>6 IDENTICAL white pens</strong>, each labeled with a descriptive word (e.g., "RED", "STRIPED").</p>
+        <p>Memorize <strong>which word belongs to which spatial location</strong>.</p>
+        <p>After a brief flash, one grid spot will be highlighted and you will identify its descriptive tag using keys <strong>[1] to [4]</strong>.</p>
+      </div>
+      <div class="key-guide">Press [SPACE] to begin Phase 3</div>
+    `,
+    choices: [' '],
+    data: { Phase: 'Instructions_TaskB' }
+  });
 
-grid_positions = [
-    (-0.4,  0.18), (0.0,  0.18), (0.4,  0.18),
-    (-0.4, -0.15), (0.0, -0.15), (0.4, -0.15)
-]
+  const gridCoords = [
+    { x: 200, y: 120 }, { x: 400, y: 120 }, { x: 600, y: 120 },
+    { x: 200, y: 310 }, { x: 400, y: 310 }, { x: 600, y: 310 }
+  ];
 
-word_pool = [
+  const wordPool = [
     "RED", "STRIPED", "METALLIC", "RIDGED", "GLOSSY", "HEAVY",
     "BLUE", "DOTTED", "WOODEN", "MATTE", "HOLLOW", "CURVED"
-]
+  ];
 
-num_task_b_trials = 8
+  for (let t = 0; t < 8; t++) {
+    const trialWords = jsPsych.randomization.sampleWithoutReplacement(wordPool, 6);
+    const targetIdx = Math.floor(Math.random() * 6);
+    const targetWord = trialWords[targetIdx];
 
-for idx in range(1, num_task_b_trials + 1):
-    trial_words = random.sample(word_pool, 6)
-    target_index = random.randint(0, 5)
-    target_word = trial_words[target_index]
-    
-    # 1. ENCODING PHASE (3.0 seconds)
-    for pos, word in zip(grid_positions, trial_words):
-        pen_rect = visual.Rect(win, width=0.04, height=0.22, pos=pos, fillColor='white', lineColor='black')
-        tag_text = visual.TextStim(win, text=word, pos=(pos[0], pos[1] - 0.14), height=0.025, color='yellow', bold=True)
-        pen_rect.draw()
-        tag_text.draw()
-    win.flip()
-    core.wait(3.0)
-    
-    # 2. VISUAL MASK PHASE (1.5 seconds)
-    mask_text = visual.TextStim(win, text="###   ###   ###\n###   ###   ###\n###   ###   ###", height=0.08, color='grey')
-    mask_text.draw()
-    win.flip()
-    core.wait(1.5)
-    
-    # 3. PROBE PHASE
-    distractors = [w for w in trial_words if w != target_word]
-    options = random.sample(distractors, 3) + [target_word]
-    random.shuffle(options)
-    corr_key = str(options.index(target_word) + 1)
-    
-    for i, pos in enumerate(grid_positions):
-        outline_col = 'cyan' if i == target_index else 'dimgrey'
-        line_w = 4 if i == target_index else 1
-        slot = visual.Rect(win, width=0.05, height=0.23, pos=pos, fillColor=None, lineColor=outline_col, lineWidth=line_w)
-        slot.draw()
-        
-    question_banner = visual.TextStim(win, text="Which descriptive tag belonged to the highlighted pen?", pos=(0, 0.38), height=0.03, color='white')
-    options_str = f"[1] {options[0]}      [2] {options[1]}      [3] {options[2]}      [4] {options[3]}"
-    options_banner = visual.TextStim(win, text=options_str, pos=(0, -0.38), height=0.03, color='cyan')
-    
-    question_banner.draw()
-    options_banner.draw()
-    win.flip()
-    
-    clock.reset()
-    keys = event.waitKeys(keyList=['1', '2', '3', '4', 'escape'])
-    rt_ms = round(clock.getTime() * 1000, 2)
-    
-    if 'escape' in keys:
-        data_file.close()
-        win.close()
-        core.quit()
-        
-    resp = keys[0]
-    acc = 1 if resp == corr_key else 0
-    
-    writer.writerow([
-        anon_id, 'TaskB_Semantic', idx, f"Grid_Pos_{target_index}",
-        f"Target_{target_word}", corr_key, resp, acc, rt_ms, vviq_total, cog_group
-    ])
+    const distractors = jsPsych.randomization.sampleWithoutReplacement(
+      trialWords.filter(w => w !== targetWord), 3
+    );
+    const options = jsPsych.randomization.shuffle([...distractors, targetWord]);
+    const corrKey = (options.indexOf(targetWord) + 1).toString();
 
-# ==============================================================================
-# 4. CLEANUP & FINISH
-# ==============================================================================
-data_file.close()
-show_instructions(
-    f"EXPERIMENT COMPLETE!\n\n"
-    f"Anonymous Session Code: {anon_id}\n"
-    f"Your VVIQ Score: {vviq_total} ({cog_group})\n\n"
-    "Thank you for participating!"
-)
-win.close()
-core.quit()
+    // 1. Encoding Phase (3000ms)
+    timeline.push({
+      type: jsPsychCanvasKeyboardResponse,
+      canvas_size: [440, 800],
+      stimulus: function(c) {
+        const ctx = c.getContext('2d');
+        gridCoords.forEach((pos, i) => {
+          // Draw identical blank white pen
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(pos.x - 12, pos.y - 55, 24, 110);
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(pos.x - 12, pos.y - 55, 24, 110);
+
+          // Draw descriptive tag underneath
+          ctx.fillStyle = '#FFFF00';
+          ctx.font = 'bold 18px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText(trialWords[i], pos.x, pos.y + 80);
+        });
+      },
+      choices: "NO_KEYS",
+      trial_duration: 3000
+    });
+
+    // 2. Visual Mask Phase (1500ms)
+    timeline.push({
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: '<div style="font-size:42px; color:#888; letter-spacing:10px;">### ### ###<br>### ### ###<br>### ### ###</div>',
+      choices: "NO_KEYS",
+      trial_duration: 1500
+    });
+
+    // 3. Probe Phase
+    timeline.push({
+      type: jsPsychCanvasKeyboardResponse,
+      canvas_size: [440, 800],
+      stimulus: function(c) {
+        const ctx = c.getContext('2d');
+        gridCoords.forEach((pos, i) => {
+          ctx.strokeStyle = (i === targetIdx) ? '#00FFFF' : '#555555';
+          ctx.lineWidth = (i === targetIdx) ? 4 : 1;
+          ctx.strokeRect(pos.x - 16, pos.y - 60, 32, 120);
+        });
+      },
+      prompt: `
+        <div style="font-size:20px; margin-bottom:10px;">Which descriptive tag belonged to the highlighted pen?</div>
+        <div class="key-guide">[1] ${options[0]} &nbsp;&nbsp;&nbsp; [2] ${options[1]} &nbsp;&nbsp;&nbsp; [3] ${options[2]} &nbsp;&nbsp;&nbsp; [4] ${options[3]}</div>
+      `,
+      choices: ['1', '2', '3', '4'],
+      data: {
+        Phase: 'TaskB_Semantic',
+        Trial_Num: t + 1,
+        Condition_Detail: `Grid_Pos_${targetIdx}`,
+        Stimulus_Info: `Target_${targetWord}`,
+        Correct_Answer: corrKey
+      },
+      on_finish: function(data) {
+        data.Participant_Response = data.response;
+        data.Accuracy = (data.response === corrKey) ? 1 : 0;
+        data.Reaction_Time_ms = Math.round(data.rt);
+      }
+    });
+  }
+
+  // ============================================================================
+  // COMPLETION SCREEN
+  // ============================================================================
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+      let groupLabel = "Typical/Intermediate";
+      if (vviqTotal <= 20) groupLabel = "Aphantasic";
+      else if (vviqTotal >= 60) groupLabel = "Visualizer";
+
+      return `
+        <h2>Experiment Complete!</h2>
+        <div class="prompt-box">
+          <p>Anonymous Session Code: <span class="highlight-cyan">${anonId}</span></p>
+          <p>Your VVIQ Score: <span class="highlight-cyan">${vviqTotal}</span> (${groupLabel})</p>
+          <p style="font-size:16px; color:#cccccc;">Your anonymous data file has been generated. Thank you for contributing to this research!</p>
+        </div>
+      `;
+    },
+    choices: "NO_KEYS"
+  });
+
+  jsPsych.run(timeline);
+</script>
+</html>
