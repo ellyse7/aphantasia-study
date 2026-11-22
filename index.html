@@ -1,0 +1,277 @@
+import os
+import csv
+import random
+import string
+from psychopy import visual, core, event
+
+# ==============================================================================
+# 1. ANONYMOUS ID & IRB-COMPLIANT DATA SETUP (ZERO IDENTIFIABLE INFO)
+# ==============================================================================
+# Generate a random 6-digit anonymous participant ID (no names, ages, or timestamps)
+anon_id = "ANON_" + ''.join(random.choices(string.digits, k=6))
+
+if not os.path.exists('data'):
+    os.makedirs('data')
+
+filename = f"data/{anon_id}.csv"
+
+data_file = open(filename, mode='w', newline='', encoding='utf-8')
+writer = csv.writer(data_file)
+writer.writerow([
+    'Anonymous_ID', 'Phase', 'Trial_Num', 'Condition_Detail', 
+    'Stimulus_Info', 'Correct_Answer', 'Participant_Response', 
+    'Accuracy', 'Reaction_Time_ms', 'VVIQ_Total_Score', 'Cognitive_Group'
+])
+
+# ==============================================================================
+# 2. WINDOW & GLOBAL STIMULI SETUP
+# ==============================================================================
+win = visual.Window(size=[1280, 800], fullscr=False, color=[-0.2, -0.2, -0.2], units='height')
+clock = core.Clock()
+
+def show_instructions(text_str, continue_key='space', prompt_text="Press [SPACE] to continue..."):
+    msg = visual.TextStim(win, text=text_str, height=0.035, wrapWidth=1.2, color='white')
+    prompt = visual.TextStim(win, text=prompt_text, pos=(0, -0.35), height=0.025, color='lightgrey')
+    msg.draw()
+    prompt.draw()
+    win.flip()
+    keys = event.waitKeys(keyList=[continue_key, 'escape'])
+    if 'escape' in keys:
+        data_file.close()
+        win.close()
+        core.quit()
+
+# ==============================================================================
+# INFORMED CONSENT SCREEN (IRB REQUIREMENT)
+# ==============================================================================
+show_instructions(
+    "INFORMED CONSENT & ANONYMOUS PARTICIPATION\n\n"
+    "You are invited to participate in a cognitive science research study examining visual imagery and memory.\n\n"
+    "• Your participation is completely voluntary and anonymous.\n"
+    "• No personally identifiable information (name, age, IP address, or timestamp) is collected.\n"
+    "• You may stop at any time by pressing the [ESC] key.\n\n"
+    "By pressing [Y], you confirm that you understand and consent to participate.",
+    continue_key='y',
+    prompt_text="Press [Y] to Consent and Begin   |   Press [ESC] to Exit"
+)
+
+# ==============================================================================
+# PHASE 1: VVIQ SCREENING (16 ITEMS)
+# ==============================================================================
+show_instructions(
+    "PHASE 1: VISUAL IMAGERY QUESTIONNAIRE\n\n"
+    "For each scenario, rate how vivid your mental image is using keys 1 to 5:\n\n"
+    "1 = No image at all (you only 'know' you are thinking of the object)\n"
+    "2 = Vague and dim\n"
+    "3 = Moderately clear and vivid\n"
+    "4 = Clear and reasonably vivid\n"
+    "5 = Perfectly clear and as vivid as real vision"
+)
+
+vviq_prompts = [
+    "1. Think of a relative or friend you see frequently: The exact contour of their face, head, shoulders, and body.",
+    "2. The characteristic poses of their head, attitudes of body, etc.",
+    "3. The precise carriage, length of step, etc. in walking.",
+    "4. The different colors worn in some familiar clothes.",
+    "5. Visualize a rising sun: The sun is rising above the horizon into a hazy sky.",
+    "6. The sky clears and surrounds the sun with blueness.",
+    "7. Clouds. A storm blows up, with flashes of lightning.",
+    "8. A rainbow appears.",
+    "9. Think of the front of a shop you often go to: The overall appearance of the shop from the opposite side of the road.",
+    "10. A window display including colors, shapes, and details of individual items for sale.",
+    "11. You are near the entrance. The color, shape, and details of the door.",
+    "12. You enter the shop and go to the counter. The counter assistant serves you. Money changes hands.",
+    "13. Think of a country scene involving trees, mountains, and a lake: The contours of the landscape.",
+    "14. The color and shape of the trees.",
+    "15. The color and shape of the lake.",
+    "16. A strong wind blows on the trees and on the lake causing waves."
+]
+
+vviq_total = 0
+
+for idx, prompt_text in enumerate(vviq_prompts, start=1):
+    q_stim = visual.TextStim(win, text=prompt_text, pos=(0, 0.1), height=0.035, wrapWidth=1.2, color='white')
+    scale_stim = visual.TextStim(win, text="[1] No Image    [2] Dim    [3] Moderate    [4] Clear    [5] Perfectly Vivid", pos=(0, -0.15), height=0.028, color='cyan')
+    
+    q_stim.draw()
+    scale_stim.draw()
+    win.flip()
+    
+    clock.reset()
+    keys = event.waitKeys(keyList=['1', '2', '3', '4', '5', 'escape'])
+    rt_ms = round(clock.getTime() * 1000, 2)
+    
+    if 'escape' in keys:
+        data_file.close()
+        win.close()
+        core.quit()
+        
+    rating = int(keys[0])
+    vviq_total += rating
+    
+    writer.writerow([
+        anon_id, 'VVIQ', idx, 'Screening', 
+        f'Item_{idx}', 'N/A', rating, 'N/A', rt_ms, '', ''
+    ])
+
+if vviq_total <= 20:
+    cog_group = "Aphantasic"
+elif vviq_total >= 60:
+    cog_group = "Visualizer"
+else:
+    cog_group = "Typical/Intermediate"
+
+# ==============================================================================
+# PHASE 2: TASK A - SPATIAL ROTATION MATRIX
+# ==============================================================================
+show_instructions(
+    "PHASE 2: SPATIAL ROTATION TASK\n\n"
+    "You will see two geometric shapes side-by-side.\n"
+    "The shape on the right is rotated at an angle.\n\n"
+    "Decide if the right shape is the EXACT SAME shape rotated, or a MIRROR IMAGE.\n\n"
+    "Press [S] for SAME\n"
+    "Press [M] for MIRROR IMAGE\n\n"
+    "Respond as quickly and accurately as possible."
+)
+
+base_vertices = [
+    (-0.12, -0.12), (-0.04, -0.12), (-0.04, 0.04), 
+    (0.10, 0.04), (0.10, 0.12), (-0.12, 0.12)
+]
+mirror_vertices = [(-x, y) for (x, y) in base_vertices]
+
+angles = [0, 45, 90, 135, 180]
+task_a_trials = []
+for ang in angles:
+    task_a_trials.append({'angle': ang, 'is_mirror': False, 'corr': 's'})
+    task_a_trials.append({'angle': ang, 'is_mirror': True, 'corr': 'm'})
+
+random.shuffle(task_a_trials)
+
+for idx, trial in enumerate(task_a_trials, start=1):
+    fix = visual.TextStim(win, text='+', height=0.05, color='white')
+    fix.draw()
+    win.flip()
+    core.wait(0.5)
+    
+    left_shape = visual.ShapeStim(win, vertices=base_vertices, pos=(-0.3, 0), fillColor='steelblue', lineColor='white')
+    
+    verts = mirror_vertices if trial['is_mirror'] else base_vertices
+    right_shape = visual.ShapeStim(win, vertices=verts, pos=(0.3, 0), ori=trial['angle'], fillColor='steelblue', lineColor='white')
+    
+    helper = visual.TextStim(win, text="[S] = Same     |     [M] = Mirror", pos=(0, -0.35), height=0.025, color='lightgrey')
+    
+    left_shape.draw()
+    right_shape.draw()
+    helper.draw()
+    win.flip()
+    
+    clock.reset()
+    keys = event.waitKeys(keyList=['s', 'm', 'escape'])
+    rt_ms = round(clock.getTime() * 1000, 2)
+    
+    if 'escape' in keys:
+        data_file.close()
+        win.close()
+        core.quit()
+        
+    resp = keys[0]
+    acc = 1 if resp == trial['corr'] else 0
+    
+    writer.writerow([
+        anon_id, 'TaskA_Rotation', idx, f"Angle_{trial['angle']}",
+        f"Mirror_{trial['is_mirror']}", trial['corr'], resp, acc, rt_ms, vviq_total, cog_group
+    ])
+
+# ==============================================================================
+# PHASE 3: TASK B - SEMANTIC TAGGING ON IDENTICAL OBJECTS ("BLANK PENS")
+# ==============================================================================
+show_instructions(
+    "PHASE 3: SPATIAL-SEMANTIC FEATURE RECALL\n\n"
+    "You will see a grid of 6 IDENTICAL white pens, each labeled with a descriptive word (e.g., 'RED', 'STRIPED').\n\n"
+    "Memorize WHICH word belongs to WHICH spatial location.\n"
+    "After a brief flash, one grid spot will be highlighted and you will identify its descriptive tag.\n\n"
+    "Press [1], [2], [3], or [4] to select the matching word."
+)
+
+grid_positions = [
+    (-0.4,  0.18), (0.0,  0.18), (0.4,  0.18),
+    (-0.4, -0.15), (0.0, -0.15), (0.4, -0.15)
+]
+
+word_pool = [
+    "RED", "STRIPED", "METALLIC", "RIDGED", "GLOSSY", "HEAVY",
+    "BLUE", "DOTTED", "WOODEN", "MATTE", "HOLLOW", "CURVED"
+]
+
+num_task_b_trials = 8
+
+for idx in range(1, num_task_b_trials + 1):
+    trial_words = random.sample(word_pool, 6)
+    target_index = random.randint(0, 5)
+    target_word = trial_words[target_index]
+    
+    # 1. ENCODING PHASE (3.0 seconds)
+    for pos, word in zip(grid_positions, trial_words):
+        pen_rect = visual.Rect(win, width=0.04, height=0.22, pos=pos, fillColor='white', lineColor='black')
+        tag_text = visual.TextStim(win, text=word, pos=(pos[0], pos[1] - 0.14), height=0.025, color='yellow', bold=True)
+        pen_rect.draw()
+        tag_text.draw()
+    win.flip()
+    core.wait(3.0)
+    
+    # 2. VISUAL MASK PHASE (1.5 seconds)
+    mask_text = visual.TextStim(win, text="###   ###   ###\n###   ###   ###\n###   ###   ###", height=0.08, color='grey')
+    mask_text.draw()
+    win.flip()
+    core.wait(1.5)
+    
+    # 3. PROBE PHASE
+    distractors = [w for w in trial_words if w != target_word]
+    options = random.sample(distractors, 3) + [target_word]
+    random.shuffle(options)
+    corr_key = str(options.index(target_word) + 1)
+    
+    for i, pos in enumerate(grid_positions):
+        outline_col = 'cyan' if i == target_index else 'dimgrey'
+        line_w = 4 if i == target_index else 1
+        slot = visual.Rect(win, width=0.05, height=0.23, pos=pos, fillColor=None, lineColor=outline_col, lineWidth=line_w)
+        slot.draw()
+        
+    question_banner = visual.TextStim(win, text="Which descriptive tag belonged to the highlighted pen?", pos=(0, 0.38), height=0.03, color='white')
+    options_str = f"[1] {options[0]}      [2] {options[1]}      [3] {options[2]}      [4] {options[3]}"
+    options_banner = visual.TextStim(win, text=options_str, pos=(0, -0.38), height=0.03, color='cyan')
+    
+    question_banner.draw()
+    options_banner.draw()
+    win.flip()
+    
+    clock.reset()
+    keys = event.waitKeys(keyList=['1', '2', '3', '4', 'escape'])
+    rt_ms = round(clock.getTime() * 1000, 2)
+    
+    if 'escape' in keys:
+        data_file.close()
+        win.close()
+        core.quit()
+        
+    resp = keys[0]
+    acc = 1 if resp == corr_key else 0
+    
+    writer.writerow([
+        anon_id, 'TaskB_Semantic', idx, f"Grid_Pos_{target_index}",
+        f"Target_{target_word}", corr_key, resp, acc, rt_ms, vviq_total, cog_group
+    ])
+
+# ==============================================================================
+# 4. CLEANUP & FINISH
+# ==============================================================================
+data_file.close()
+show_instructions(
+    f"EXPERIMENT COMPLETE!\n\n"
+    f"Anonymous Session Code: {anon_id}\n"
+    f"Your VVIQ Score: {vviq_total} ({cog_group})\n\n"
+    "Thank you for participating!"
+)
+win.close()
+core.quit()
